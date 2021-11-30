@@ -542,6 +542,12 @@ void do_fetch_stage()
 
     /* your implementation */
     byte_t tempB;
+    if (fetch_output->status != STAT_BUB){
+        printf("%d STAT i\n",fetch_input->status );
+        printf("%d STAT o\n",fetch_output->status );
+        f_pc = fetch_input->predPC;
+    }
+    //f_pc = fetch_input->predPC;
 	imem_error |= !get_byte_val(mem, f_pc, &instr);
 	byte_t icode = HI4(instr);
     byte_t ifun = LO4(instr);
@@ -550,6 +556,7 @@ void do_fetch_stage()
 	word_t valc = 0;
     word_t valp = 0;
     //set f_pc at first
+    
     
 	switch (instr) {
 		case HPACK(I_NOP, F_NONE):
@@ -604,6 +611,8 @@ void do_fetch_stage()
 			ra = HI4(tempB);
 			rb = LO4(tempB);
 			valp = f_pc + 2;
+            printf("XOR\n");
+            //prog7
             //fetch_output->predPC = valp;
 			break;
 		case HPACK(I_JMP, C_YES):
@@ -615,13 +624,13 @@ void do_fetch_stage()
 		case HPACK(I_JMP, C_G):
 			imem_error |= !get_word_val(mem, f_pc + 1, &valc);
 			valp = f_pc + 9;
-            fetch_output->predPC = valc;
+            fetch_input->predPC = valc;
             //chose pc 
 	    	break;
 		case HPACK(I_CALL, F_NONE):
 		    imem_error |= !get_word_val(mem, f_pc + 1, &valc);
 		    valp = f_pc + 9;
-            fetch_output->predPC = valc;
+            fetch_input->predPC = valc;
 		    break;
 		case HPACK(I_RET, F_NONE):
 		    valp = f_pc + 1;
@@ -648,11 +657,17 @@ void do_fetch_stage()
 			break;
 	}
 
-    if (fetch_input->predPC != valc) {
+    if (instr != HPACK(I_JMP, C_G) && instr != HPACK(I_CALL, F_NONE)) {
         fetch_input->predPC = valp ;
     }
+    printf("%lld valc \n",valc);
+    printf("%lld PREDPC \n", fetch_input->predPC);
+     printf("%lld valP \n", valp);
+    // imem_error 
+    // instr_valid 
+
+
     
-    f_pc = valp;
     //valc jump or call
     decode_input->icode = icode;
     decode_input->ifun = ifun;
@@ -661,6 +676,11 @@ void do_fetch_stage()
     decode_input->valc = valc;
     decode_input->valp = valp;
     decode_input->status = STAT_AOK;
+    decode_input->stage_pc = f_pc;
+    //fetch_input->status = STAT_AOK;
+    
+     //check for bubble 
+    //check for what the status 
     //decode_input->stage_pc;//idk
 
     // sim_log("IF: Fetched %s at 0x%llx.  ra=%s, rb=%s, valC = 0x%llx\n",
@@ -687,9 +707,9 @@ void do_decode_stage()
     word_t vala = 0;
     word_t valb = 0;
 
-    // if (decode_input->ra == memory_input->srca ){
+    //  if (decode_input->ra == memory_input->srca ){
 
-    // }
+    //  }
 
 
 	switch (decode_output->icode) {
@@ -720,6 +740,7 @@ void do_decode_stage()
 			srcA = decode_output->ra;
 			srcB = decode_output->rb;
 			destE = decode_output->rb;
+            printf("%lld MATH", srcA);
     		break;
 
 		case I_JMP: break;
@@ -753,80 +774,24 @@ void do_decode_stage()
 			break;
 	}
 
-	//vala = get_reg_val(reg, srcA);
-	//valb = get_reg_val(reg, srcB);
-    
-    //Forwarding: Transferred from book
-    //Big letters are outputs
-    /*vala = 
-    D_icode in { ICALL , IJXX } : D_valP; // incremented PC
-    d_srcA == e_dstE : e_valE; //forward vale from exe cute
-    d_srcA == M_dstM : m_valM // Forward valm from memory
-    d_srcA == M_dstE : M_valE; //forward vale from memory
-    d_srcA == W_dstM : W_valM; //forward valm from writeback
-    d_srcA == W_dstE : W_valE; //forward vale from write back
-    1 : d_rvalA; // use vale read from register file 
-    */
+	vala = get_reg_val(reg, srcA);
+	valb = get_reg_val(reg, srcB);
+    // if (decode_output->icode == I_JMP || decode_output->icode == I_CALL){
+    //     vala = decode_input->valp;
+    // } else if (srcA == execute_input->deste){
+    //     vala = memory_input->vale;
+    // } else if (srcA == memory_input->deste){
+    //     vala = memory_input->vale;
+    // } else if (srcA == memory_input->destm){
+    //     vala = writeback_input->valm;
+    // } else if (srcA == writeback_input->deste){
+    //     vala = writeback_input->vale;
+    // } else if (srcA == writeback_input->destm){
+    //     vala = writeback_input->valm;
+    // } else {
+    //     vala = get_reg_val(reg, srcA);
+    // }
 
-    //Assumptions made: 
-    //Big letters are outputs of stages; Small letters are inputs of stages
-    //d_srcA - just use the srcA I have made
-    //SCRATCH - From Diagram - ra
-    //WriteBack variables - use the dummy placeholders at the top of the stage
-    // - do something similar for memory variables
-
-    if(decode_output -> icode == I_CALL || decode_output -> icode == I_JMP) {
-        printf("DECODE_FORWARD_SRCA: CALL/JMP\n");
-        vala  = decode_output -> valp;
-    } else if(decode_output -> ra == execute_input -> deste && execute_input -> deste != 15 && decode_output -> ra != 15) {
-        printf("DECODE_FORWARD_SRCA : e_dstE\n");
-        // e_valE ? - execute_input -> vale????
-        // From diagram        vvvv
-        vala = memory_input -> vale;
-    } else if(decode_output -> ra == memory_output -> destm && memory_output -> destm != 15 && decode_output -> ra != 15) {
-        printf("DECODE_FORWARD_SRCA : M_dstM\n");
-        // m_valM ? - memory_input -> valm?????
-        // From diagram           vvvv
-        vala = writeback_input -> valm;
-    } else if(decode_output -> ra == memory_output -> deste && memory_output -> deste != 15 && decode_output -> ra != 15) {
-        printf("DECODE_FORWARD_SRCA : M_dstE\n");
-        vala = memory_output -> vale;
-    } else if(decode_output -> ra == writeback_output -> destm && writeback_output -> destm != 15 && decode_output -> ra != 15) {
-        printf("DECODE_FORWARD_SRCA : W_dstM\n");
-        vala = writeback_output -> valm;
-    } else if(decode_output -> ra == writeback_output -> deste && memory_output -> deste != 15 && decode_output -> ra != 15) {
-        printf("DECODE_FORWARD_SRCA : W_dstE\n");
-        vala = writeback_output -> vale;
-    } else {
-        vala = get_reg_val(reg, srcA);
-    }
-    
-    //Copy and paste for valb?
-    //From diagram - no valp case
-    if(decode_output -> rb == execute_input -> deste && execute_input -> deste != 15 && decode_output -> rb != 15) {
-        printf("DECODE_FORWARD_SRCB : e_dstE\n");
-        // e_valE ? - execute_input -> vale????
-        // From diagram        vvvv
-        valb = memory_input -> vale;
-    } else if(decode_output -> rb == memory_output -> destm && memory_output -> destm != 15 && decode_output -> rb != 15) {
-        printf("DECODE_FORWARD_SRCB : M_dstM\n");
-        // m_valM ? - memory_input -> valm?????
-        // From diagram           vvvv
-        valb = writeback_input -> valm;
-    } else if(decode_output -> rb == memory_output -> deste && memory_output -> deste != 15 && decode_output -> rb != 15) {
-        printf("DECODE_FORWARD_SRCB : M_dstE\n");
-        valb = memory_output -> vale;
-    } else if(decode_output -> rb == writeback_output -> destm && writeback_output -> destm != 15 && decode_output -> rb != 15) {
-        printf("DECODE_FORWARD_SRCB : W_dstM\n");
-        valb = writeback_output -> valm;
-    } else if(decode_output -> rb == writeback_output -> deste && memory_output -> deste != 15 && decode_output -> rb != 15) {
-        printf("DECODE_FORWARD_SRCB : W_dstE\n");
-        valb = writeback_output -> vale;
-    } else {
-        valb = get_reg_val(reg, srcB);
-    }
-    
-    
     execute_input->icode = decode_output->icode;
     execute_input->ifun = decode_output->ifun;
     execute_input->valc = decode_output->valc;
@@ -1102,38 +1067,50 @@ p_stat_t pipe_cntl(char *name, word_t stall, word_t bubble)
  *******************************************************************/
 void do_stall_check()
 {
-
-
-
-
-
-
-
-
-
-
-
-
-    
     /* your implementation */
     // dummy placeholders to show the usage of pipe_cntl()
-    /*
-    if ((memory_output->icode != I_NOP && decode_output->ra != 15 ) && (decode_input->ra == memory_input->deste || decode_input->ra == memory_input->destm ||
-            decode_input->rb == memory_input->deste || decode_input->rb == memory_input->destm)) {
-        fetch_state->op = pipe_cntl("PC", true, false);
-        execute_state->op = pipe_cntl("EX", false, true);
-        decode_state->op = pipe_cntl("ID", true, false);
+   
+    //printf("LETS GET THIS STALLING\n");
+    printf("%d,RA i \n", decode_input->ra);
+    printf("%d,RB i\n", decode_input->rb);
+    printf("%d,DESTE i\n", execute_input->deste);
+    printf("%d,DESTM i\n", execute_input->destm);
+     printf("%d,RA o\n", decode_output->ra);
+    printf("%d,RB o\n", decode_output->rb);
+    printf("%d,DESTE o\n", execute_output->deste);
+    printf("%d,DESTM o\n", execute_output->destm);
+    if (((memory_output->icode != I_NOP || execute_output->icode != I_NOP) && decode_output->ra != 15 && decode_output->rb != 15) && (decode_input->ra == memory_input->deste || decode_input->ra == memory_input->destm ||
+    decode_input->rb == memory_input->deste || decode_input->rb == memory_input->destm || decode_output->ra == memory_output->deste || decode_output->rb == memory_output->deste ||
+     decode_output->ra == execute_output->deste || decode_output->rb == execute_output->deste || decode_output->rb == execute_output->destm)){
+    fetch_state->op     = pipe_cntl("PC", true, false);
+     execute_state->op   = pipe_cntl("EX", false, true);
+    decode_state->op   = pipe_cntl("ID", true, false);
+    fetch_output->status = STAT_BUB;
+    //all outputs, inputs for destt e 
+    printf("LETS GET THIS STALLING\n");
+    // printf("%d,RA \n", decode_input->ra);
+    // printf("%d,RB \n", decode_input->rb);
+    // printf("%d,DESTE \n", memory_input->deste);
+    // printf("%d,DESTM \n", memory_input->destm);
+    fetch_input->status = STAT_AOK;
     } else {
-        fetch_state->op = pipe_cntl("PC", false, false);
-        execute_state->op = pipe_cntl("EX", false, false);
-        decode_state->op = pipe_cntl("ID", false, false);
+         fetch_state->op     = pipe_cntl("PC", false, false);
+         execute_state->op   = pipe_cntl("EX", false, false);
+        decode_state->op    = pipe_cntl("ID", false, false);
     }
-       
+    
+    // if ((memory_output->icode != I_NOP && decode_output->ra != 15 ) && (decode_input->ra == memory_input->deste || decode_input->ra == memory_input->destm ||
+    // decode_input->rb == memory_input->deste || decode_input->rb == memory_input->destm)){
+    // fetch_state->op     = pipe_cntl("PC", true, false);
+    // decode_state->op   = pipe_cntl("ID", false, true);
+    // } else {
+    //      fetch_state->op     = pipe_cntl("PC", false, false);
+    //     decode_state->op    = pipe_cntl("ID", false, false);
+    // }
     
     
-    memory_state->op = pipe_cntl("MEM", false, false);
+    memory_state->op    = pipe_cntl("MEM", false, false);
     writeback_state->op = pipe_cntl("WB", false, false);
-    */
 }
 
 /*
