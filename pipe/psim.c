@@ -547,6 +547,10 @@ void do_fetch_stage()
         printf("%d STAT o\n",fetch_output->status );
         f_pc = fetch_input->predPC;
     }
+    if (writeback_output->icode == I_RET){
+        printf("WB has RETURN");
+        f_pc = writeback_output->valm;
+    }
     //f_pc = fetch_input->predPC;
 	imem_error |= !get_byte_val(mem, f_pc, &instr);
 	byte_t icode = HI4(instr);
@@ -631,9 +635,13 @@ void do_fetch_stage()
 		    imem_error |= !get_word_val(mem, f_pc + 1, &valc);
 		    valp = f_pc + 9;
             fetch_input->predPC = valc;
+            ra = HI4(tempB);
+			rb = LO4(tempB);
 		    break;
 		case HPACK(I_RET, F_NONE):
 		    valp = f_pc + 1;
+            ra = HI4(tempB);
+			rb = LO4(tempB);
             //fetch_output->predPC = valp;
 			break;
 		case HPACK(I_PUSHQ, F_NONE):
@@ -969,6 +977,7 @@ void do_memory_stage()
 				break;
 
 			case I_RET:
+                printf("WB RET CASE %lld \n", valm);
 				dmem_error |= !get_word_val(mem, memory_output->vala, &valm);
 				break;
 
@@ -990,6 +999,7 @@ void do_memory_stage()
         writeback_input->ifun = memory_output->ifun;
         writeback_input->vale = memory_output->vale;
         writeback_input->valm = valm;
+        printf("END WB VALM %lld \n", valm);
         writeback_input->deste = memory_output->deste;
         writeback_input->destm = memory_output->destm;
         
@@ -1025,7 +1035,7 @@ void do_writeback_stage()
     wb_valE  = writeback_output->vale;
     wb_destM = writeback_output->destm;
     wb_valM  = writeback_output->valm;
-
+    printf("LAST STAGE VALM %lld \n", wb_valM);
     /* your implementation */
 
     status = writeback_output->status;
@@ -1071,14 +1081,14 @@ void do_stall_check()
     // dummy placeholders to show the usage of pipe_cntl()
    
     //printf("LETS GET THIS STALLING\n");
-    printf("%d,RA i \n", decode_input->ra);
-    printf("%d,RB i\n", decode_input->rb);
-    printf("%d,DESTE i\n", execute_input->deste);
-    printf("%d,DESTM i\n", execute_input->destm);
-     printf("%d,RA o\n", decode_output->ra);
-    printf("%d,RB o\n", decode_output->rb);
-    printf("%d,DESTE o\n", execute_output->deste);
-    printf("%d,DESTM o\n", execute_output->destm);
+    // printf("%d,RA i \n", decode_input->ra);
+    // printf("%d,RB i\n", decode_input->rb);
+    // printf("%d,DESTE i\n", execute_input->deste);
+    // printf("%d,DESTM i\n", execute_input->destm);
+    //  printf("%d,RA o\n", decode_output->ra);
+    // printf("%d,RB o\n", decode_output->rb);
+    // printf("%d,DESTE o\n", execute_output->deste);
+    // printf("%d,DESTM o\n", execute_output->destm);
     if (((memory_output->icode != I_NOP || execute_output->icode != I_NOP) && decode_output->ra != 15 && decode_output->rb != 15) && (decode_input->ra == memory_input->deste || decode_input->ra == memory_input->destm ||
     decode_input->rb == memory_input->deste || decode_input->rb == memory_input->destm || decode_output->ra == memory_output->deste || decode_output->rb == memory_output->deste ||
      decode_output->ra == execute_output->deste || decode_output->rb == execute_output->deste || decode_output->rb == execute_output->destm)){
@@ -1093,7 +1103,12 @@ void do_stall_check()
     // printf("%d,DESTE \n", memory_input->deste);
     // printf("%d,DESTM \n", memory_input->destm);
     fetch_input->status = STAT_AOK;
-    } else {
+    } else if (decode_output->icode == I_RET || execute_output->icode == I_RET || memory_output->icode == I_RET){
+        fetch_state->op     = pipe_cntl("PC", true, false);
+        decode_state->op   = pipe_cntl("ID", false, true);
+        fetch_output->status = STAT_BUB;
+        printf("RETURN");
+        } else {
          fetch_state->op     = pipe_cntl("PC", false, false);
          execute_state->op   = pipe_cntl("EX", false, false);
         decode_state->op    = pipe_cntl("ID", false, false);
