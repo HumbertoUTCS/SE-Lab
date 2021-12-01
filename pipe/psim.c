@@ -628,13 +628,13 @@ void do_fetch_stage()
 		case HPACK(I_JMP, C_G):
 			imem_error |= !get_word_val(mem, f_pc + 1, &valc);
 			valp = f_pc + 9;
-            fetch_input->predPC = valc;
+            //fetch_input->predPC = valc;
             //chose pc 
 	    	break;
 		case HPACK(I_CALL, F_NONE):
 		    imem_error |= !get_word_val(mem, f_pc + 1, &valc);
 		    valp = f_pc + 9;
-            fetch_input->predPC = valc;
+            //fetch_input->predPC = valc;
             ra = HI4(tempB);
 			rb = LO4(tempB);
 		    break;
@@ -667,6 +667,8 @@ void do_fetch_stage()
 
     if (instr != HPACK(I_JMP, C_G) && instr != HPACK(I_CALL, F_NONE)) {
         fetch_input->predPC = valp ;
+    } else {
+        fetch_input->predPC = valc ;
     }
     printf("%lld valc \n",valc);
     printf("%lld PREDPC \n", fetch_input->predPC);
@@ -784,22 +786,48 @@ void do_decode_stage()
 
 	vala = get_reg_val(reg, srcA);
 	valb = get_reg_val(reg, srcB);
-    // if (decode_output->icode == I_JMP || decode_output->icode == I_CALL){
-    //     vala = decode_input->valp;
-    // } else if (srcA == execute_input->deste){
-    //     vala = memory_input->vale;
-    // } else if (srcA == memory_input->deste){
-    //     vala = memory_input->vale;
-    // } else if (srcA == memory_input->destm){
-    //     vala = writeback_input->valm;
-    // } else if (srcA == writeback_input->deste){
-    //     vala = writeback_input->vale;
-    // } else if (srcA == writeback_input->destm){
-    //     vala = writeback_input->valm;
-    // } else {
-    //     vala = get_reg_val(reg, srcA);
-    // }
+    if(decode_output -> icode == I_CALL || decode_output -> icode == I_JMP) {
+        printf("DECODE_FORWARD_SRCA: CALL/JMP\n");
+        vala  = decode_output -> valp;
+    } else if(srcA == memory_input -> deste && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : e_dstE\n");
+        vala = memory_input -> vale;
+    } else if(srcA == memory_output -> destm && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : M_dstM\n");
+        vala = writeback_input -> valm;
+    } else if(srcA == memory_output -> deste && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : M_dstE\n");
+        vala = memory_output -> vale;
+    } else if(srcA == wb_destM && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : W_dstM\n");
+        vala = wb_valM;
+    } else if(srcA == wb_destE && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : W_dstE\n");
+        vala = wb_valE;
+    } else {
+        vala = get_reg_val(reg, srcA);
+    }
 
+    //Copy and paste for valb?
+    //From diagram - no valp case
+    if(srcB == memory_input -> deste && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : e_dstE\n");
+        valb = memory_input -> vale;
+    } else if(srcB == memory_output -> destm && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : M_dstM\n");
+        valb = writeback_input -> valm;
+    } else if(srcB == memory_output -> deste && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : M_dstE\n");
+        valb = memory_output -> vale;
+    } else if(srcB == wb_destM && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : W_dstM\n");
+        valb = wb_valM;
+    } else if(srcB == wb_destE && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : W_dstE\n");
+        valb = wb_valE;
+    } else {
+        valb = get_reg_val(reg, srcB);
+    }
     execute_input->icode = decode_output->icode;
     execute_input->ifun = decode_output->ifun;
     execute_input->valc = decode_output->valc;
@@ -973,7 +1001,7 @@ void do_memory_stage()
 			case I_CALL:
 				mem_write = true;
 				mem_addr = memory_output->vale;
-				mem_data = decode_output->valp;//??????? had to grab valp from decode @_@
+				mem_data = memory_output->vala;//??????? had to grab valp from decode @_@
 				break;
 
 			case I_RET:
