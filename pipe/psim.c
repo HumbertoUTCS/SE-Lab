@@ -1004,15 +1004,6 @@ void do_memory_stage()
     mem_read   = false;
     dmem_error = false;
 
-    //writeback_input->status = memory_output->status;
-    //From book p.492
-    if(dmem_error) {
-        writeback_input -> status = STAT_ADR;
-    } else {
-        writeback_input->status = memory_output->status;
-    }
-
-
     word_t valm = 0;
 
     switch (memory_output->icode) {
@@ -1031,7 +1022,7 @@ void do_memory_stage()
 				mem_addr = memory_output->vale;
 				mem_data = memory_output->vala;
                 //Something similar to MRMOVQ but with vala instead?
-                //dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
+                dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
 				break;
 
 			case I_MRMOVQ:
@@ -1059,6 +1050,7 @@ void do_memory_stage()
 				mem_write = true;
 				mem_addr = memory_output->vale;
 				mem_data = memory_output->vala;
+                dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
 				break;
 
 			case I_POPQ:
@@ -1077,6 +1069,13 @@ void do_memory_stage()
         writeback_input->destm = memory_output->destm;
         writeback_input -> stage_pc = memory_output -> stage_pc;
 
+        //writeback_input->status = memory_output->status;
+        //From book p.492
+        if(dmem_error) {
+            writeback_input -> status = STAT_ADR;
+        } else {
+            writeback_input->status = memory_output->status;
+        }
 
     /* your implementation */
 
