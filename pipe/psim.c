@@ -675,6 +675,13 @@ void do_fetch_stage()
         fetch_input -> predPC = valp;
     }
 
+    //ASSUMPTION #1:
+    //After last instruction, halts are inserted, set up status accordingly
+    if(icode == I_HALT) {
+        decode_input -> status = STAT_HLT;
+        //decode_input -> stage_pc = 0;
+    }
+
     // sim_log("IF: Fetched %s at 0x%llx.  ra=%s, rb=%s, valC = 0x%llx\n",
 	//     iname(HPACK(icode,ifun)), pc, reg_name(ra), reg_name(rb), valc);
     /* logging function, do not change this */
@@ -755,7 +762,7 @@ void do_decode_stage()
 			break;
 
 		case I_POPQ:
-			srcA = REG_RSP;
+            srcA = REG_RSP;
 			srcB = REG_RSP;
 			destE = REG_RSP;
 			destM = decode_output->ra;
@@ -914,7 +921,11 @@ void do_execute_stage()
 		case I_ALU:
             vale = compute_alu(execute_output->ifun, alua, alub);
 			cc_in = compute_cc(execute_output->ifun, alua, alub);
-			setcc = true;
+			// setcc = true;
+            //From book p.493
+            //Post: Observed no change
+            setcc = writeback_input -> status != STAT_ADR && writeback_input -> status != STAT_INS && writeback_input -> status != STAT_HLT
+                    && writeback_output -> status != STAT_ADR && writeback_output -> status != STAT_INS && writeback_output -> status != STAT_HLT;
             break;
 
 		case I_JMP:
@@ -958,8 +969,9 @@ void do_execute_stage()
     memory_input->destm = execute_output->destm;
     memory_input->srca = execute_output->srca;
     memory_input -> stage_pc = execute_output -> stage_pc;
+    //something wrong; when jne I get ? when it should be +
     alufun = execute_output -> ifun;
-
+    //printf("EX - ALUFUN = %d\n",op_name(alufun));
 
     /* your implementation */
 
@@ -991,7 +1003,16 @@ void do_memory_stage()
     mem_write  = false;
     mem_read   = false;
     dmem_error = false;
-    writeback_input->status = memory_output->status;
+
+    //writeback_input->status = memory_output->status;
+    //From book p.492
+    if(dmem_error) {
+        writeback_input -> status = STAT_ADR;
+    } else {
+        writeback_input->status = memory_output->status;
+    }
+
+
     word_t valm = 0;
 
     switch (memory_output->icode) {
@@ -1009,6 +1030,8 @@ void do_memory_stage()
 				mem_write = true;
 				mem_addr = memory_output->vale;
 				mem_data = memory_output->vala;
+                //Something similar to MRMOVQ but with vala instead?
+                //dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
 				break;
 
 			case I_MRMOVQ:
@@ -1035,7 +1058,7 @@ void do_memory_stage()
 			case I_PUSHQ:
 				mem_write = true;
 				mem_addr = memory_output->vale;
-				//mem_data = memory_output->vala;
+				mem_data = memory_output->vala;
 				break;
 
 			case I_POPQ:
@@ -1096,16 +1119,17 @@ void do_writeback_stage()
 
 
     
-    status = writeback_output->status;
+    //status = writeback_output->status;
 
     //From book ? I think this is wrong
-    /*
+    //Tested and proven to go from 147 to 145?
+    
     if(writeback_output -> status == STAT_BUB) {
         status = STAT_AOK;
     } else {
         status = writeback_output -> status;
     }
-    */
+    
 
 
     if (wb_destE != REG_NONE &&  writeback_output -> status == STAT_AOK) {
@@ -1157,49 +1181,60 @@ void do_stall_check()
 
     bool comboA = mispredictedBranchHazard && returnHazard;
     bool comboB = loadUseHazard && returnHazard;
-    printf("SC_RETURN - %d\nSC_LOAD_USE - %d\nSC_MISPREDICTED_BRANCH - %d\n",returnHazard, loadUseHazard, mispredictedBranchHazard);
 
+    // bool mBubble = false;
+    //From book p.494
+    //Post: Seems to work with no downsides! Ptest does not better
+    //
+    bool mBubble = writeback_input -> status == STAT_ADR || writeback_input -> status == STAT_INS || writeback_input -> status == STAT_HLT
+            || writeback_output -> status == STAT_ADR || writeback_output -> status == STAT_INS || writeback_output -> status == STAT_HLT;
+    
+    //Continuing p.494
+    
+    
+    
+    // printf("SC - RETURN - %d\nSC - LOAD_USE - %d\nSC - MISPREDICTED_BRANCH - %d\n",returnHazard, loadUseHazard, mispredictedBranchHazard);
     if(comboB) {
-        printf("SC - COMBO_B\n");
+        // printf("SC -> COMBO_B\n");
         fetch_state -> op = pipe_cntl("PC", true, false);
         decode_state -> op = pipe_cntl("ID", true, false);
         execute_state -> op = pipe_cntl("EX", false, true);
-        memory_state -> op = pipe_cntl("MEM", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
         writeback_state -> op = pipe_cntl("WB", false, false);
     } else if(comboA) {
-        printf("SC - COMBO_A\n");
+        // printf("SC ->  COMBO_A\n");
         fetch_state -> op = pipe_cntl("PC", true, false);
         decode_state -> op = pipe_cntl("ID", false, true);
         execute_state -> op = pipe_cntl("EX", false, true);
-        memory_state -> op = pipe_cntl("MEM", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
         writeback_state -> op = pipe_cntl("WB", false, false);
     } else if(returnHazard) {
-        printf("SC - RETURN\n");
+        // printf("SC -> RETURN\n");
         fetch_state -> op = pipe_cntl("PC", true, false);
         decode_state -> op = pipe_cntl("ID", false, true);
         execute_state -> op = pipe_cntl("EX", false, false);
-        memory_state -> op = pipe_cntl("MEM", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
         writeback_state -> op = pipe_cntl("WB", false, false);
     } else if(loadUseHazard) {
-        printf("SC - LOAD_USE\n");
+        // printf("SC -> LOAD_USE\n");
         fetch_state -> op = pipe_cntl("PC", true, false);
         decode_state -> op = pipe_cntl("ID", true, false);
         execute_state -> op = pipe_cntl("EX", false, true);
-        memory_state -> op = pipe_cntl("MEM", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
         writeback_state -> op = pipe_cntl("WB", false, false);
     } else if(mispredictedBranchHazard) {
-        printf("SC - MISPREDICTED_BRANCH\n");
+        // printf("SC -> MISPREDICTED_BRANCH\n");
         fetch_state -> op = pipe_cntl("PC", false, false);
         decode_state -> op = pipe_cntl("ID", false, true);
         execute_state -> op = pipe_cntl("EX", false, true);
-        memory_state -> op = pipe_cntl("MEM", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
         writeback_state -> op = pipe_cntl("WB", false, false);
     } else {
-        printf("SC - ELSE\n");
+        // printf("SC -> ELSE\n");
         fetch_state -> op = pipe_cntl("PC", false, false);
         decode_state -> op = pipe_cntl("ID", false, false);
         execute_state -> op = pipe_cntl("EX", false, false);
-        memory_state -> op = pipe_cntl("MEM", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
         writeback_state -> op = pipe_cntl("WB", false, false);
     }
         // fetch_state -> op = pipe_cntl("PC", false, false);
