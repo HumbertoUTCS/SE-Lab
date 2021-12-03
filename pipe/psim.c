@@ -731,6 +731,7 @@ void do_decode_stage()
 			break;
 
 		case I_MRMOVQ:
+            //m1.y0 - Should we updating srcA ?
 			srcB = decode_output->rb;
 			destM = decode_output->ra;
 			break;
@@ -800,7 +801,7 @@ void do_decode_stage()
         vala  = decode_output -> valp;
     } else if(srcA == memory_input -> deste && srcA != 15) {
         printf("DECODE_FORWARD_SRCA : e_dstE\n");
-        vala = memory_input -> vale;
+        vala = memory_input -> vale; //m1.yo - should be going here; ?
     } else if(srcA == memory_output -> destm && srcA != 15) {
         printf("DECODE_FORWARD_SRCA : M_dstM\n");
         vala = writeback_input -> valm;
@@ -814,7 +815,7 @@ void do_decode_stage()
         printf("DECODE_FORWARD_SRCA : W_dstE\n");
         vala = wb_valE;
     } else {
-        vala = get_reg_val(reg, srcA);
+        vala = get_reg_val(reg, srcA); //m1.yo - is going here instead; ?
     }
     
     //Copy and paste for valb?
@@ -931,6 +932,9 @@ void do_execute_stage()
 		case I_JMP:
             alua = 0;
 			cnd = cond_holds(cc, execute_output->ifun);
+            //cc_in = compute_cc(execute_output->ifun, alua, alub);
+            
+            //Maybe 
 			break;
 
 		case I_CALL:
@@ -958,6 +962,9 @@ void do_execute_stage()
             
         
     memory_input->takebranch=cnd;
+    //if(execute_output -> icode == I_JMP) {
+    //    memory_input -> takebranch = true;
+    //}
     
     memory_input->icode = execute_output->icode;
     
@@ -1018,6 +1025,7 @@ void do_memory_stage()
 			case I_IRMOVQ: break;
 
 			case I_RMMOVQ:
+                
 				mem_write = true;
 				mem_addr = memory_output->vale;
 				mem_data = memory_output->vala;
@@ -1026,6 +1034,7 @@ void do_memory_stage()
 				break;
 
 			case I_MRMOVQ:
+                //mem_read = true;
 				dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
 				break;
 
@@ -1054,6 +1063,7 @@ void do_memory_stage()
 				break;
 
 			case I_POPQ:
+                //mem_read = true;
 				dmem_error |= !get_word_val(mem, memory_output->vala, &valm);
 				break;
 
@@ -1169,15 +1179,10 @@ p_stat_t pipe_cntl(char *name, word_t stall, word_t bubble)
  *******************************************************************/
 void do_stall_check()
 {
-    
-
-
-
-
     bool returnHazard = (decode_output -> icode == I_RET || execute_output -> icode == I_RET || memory_output -> icode == I_RET);
     bool loadUseHazard = ((execute_output -> icode == I_MRMOVQ || execute_output -> icode == I_POPQ) && (execute_output -> destm == execute_input -> srca || execute_output -> destm == execute_input -> srcb));
-    bool mispredictedBranchHazard = (execute_output -> icode == I_JMP && (cc));
-
+    bool mispredictedBranchHazard = execute_output -> icode == I_JMP && !(memory_input -> takebranch);
+    printf("SC - BB ICODE %d cc %d\n", execute_output -> icode, cc);
     bool comboA = mispredictedBranchHazard && returnHazard;
     bool comboB = loadUseHazard && returnHazard;
 
@@ -1189,6 +1194,7 @@ void do_stall_check()
             || writeback_output -> status == STAT_ADR || writeback_output -> status == STAT_INS || writeback_output -> status == STAT_HLT;
     
     //Continuing p.494
+    //CANCELLED - not sure if it will provide benefits
     
     
     
