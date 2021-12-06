@@ -18,6 +18,7 @@
 #include "cache.h"
 
 #define ADDRESS_LENGTH 64
+//#define GRAB_SET_INDEX(uword_t x) (5)
 
 /* Counters used to record cache statistics in printSummary().
    test-cache uses these numbers to verify correctness of the cache. */
@@ -35,6 +36,7 @@ int dirty_eviction_count = 0;
 int clean_eviction_count = 0;
 
 /* TODO: add more globals, structs, macros if necessary */
+uword_t globalLru = 0;
 
 /*
  * Initialize the cache according to specified arguments
@@ -118,7 +120,7 @@ void free_cache(cache_t *cache)
     free(cache);
 }
 
-/* TODO:
+/* TODO: CHECK MARK x2
  * Get the line for address contained in the cache
  * On hit, return the cache line holding the address
  * On miss, returns NULL
@@ -126,26 +128,87 @@ void free_cache(cache_t *cache)
 cache_line_t *get_line(cache_t *cache, uword_t addr)
 {
     /* your implementation */
+
+    // unsigned long bigS = pow(2, cache -> s);
+    // unsigned long bigB = pow(2, cache -> b);
+    uword_t setIndex = addr >> cache -> b;
+    setIndex = setIndex & ((uword_t)pow(2, cache -> s) - 1);
+
+    for (unsigned int j = 0; j < cache -> E; j++){
+        //Going through all lines hopefully
+        if (cache -> sets[setIndex].lines[j].tag == ((addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, ADDRESS_LENGTH - cache -> s - cache -> b) - 1))) {
+            //XXX : why the dots and the arrows; all arrows ?
+            (cache -> sets[setIndex].lines[j]).lru = globalLru;
+            globalLru++;
+            // hit_count++;
+            // cache -> sets[setIndex].lines[j].valid = true;
+            return &(cache -> sets[setIndex].lines[j]);
+        }
+    }
+    // miss_count++;
     return NULL;
 }
 
-/* TODO:
+/* TODO: CHECK MARK
  * Select the line to fill with the new cache line
  * Return the cache line selected to filled in by addr
  */
 cache_line_t *select_line(cache_t *cache, uword_t addr)
 {
     /* your implementation */
-    return NULL;
+
+    uword_t setIndex = addr >> cache -> b;
+    setIndex = setIndex & ((uword_t)pow(2, cache -> s) - 1);
+
+
+
+    for (unsigned int j = 0; j < cache -> E; j++){
+        //Going through all lines hopefully
+        if (cache -> sets[setIndex].lines[j].valid == 0) { //TODO check 0 or 1
+             //XXX : why the dots and the arrows; all arrows ?
+            //  (cache -> sets[setIndex].lines[j]).lru = globalLru;
+            //  globalLru++;
+             return &(cache -> sets[setIndex].lines[j]);
+        }
+
+    }
+
+    //Made it this far? all lines are invalid
+    //get oldest one (lru)
+    uword_t oldestLru = cache -> sets[setIndex].lines[0].lru;
+    cache_line_t * oldestLine = &(cache -> sets[setIndex].lines[0]);
+
+    for (unsigned int j = 0; j < cache -> E; j++){
+        //Going through all lines hopefully
+        if (cache -> sets[setIndex].lines[j].lru < oldestLru) {
+             oldestLru = cache -> sets[setIndex].lines[j].lru;
+             oldestLine = &(cache -> sets[setIndex].lines[j]);
+        }
+    }
+    // oldestLine -> lru = globalLru;
+    // globalLru++;
+    return oldestLine;
 }
 
-/* TODO:
+/* TODO: CHECK MARK
  * Check if the address is hit in the cache, updating hit and miss data.
  * Return true if pos hits in the cache.
  */
 bool check_hit(cache_t *cache, uword_t addr, operation_t operation)
 {
-    /* your implementation */
+  
+    cache_line_t * possibleLine = get_line(cache, addr);
+    if(possibleLine == NULL) {
+        miss_count++;
+        return false;
+    } else if(possibleLine -> valid) {
+        hit_count++;
+        if(operation == WRITE) {
+            possibleLine -> dirty = 1;
+        }
+        return true;
+    }
+    miss_count++;
     return false;
 }
 
@@ -159,6 +222,66 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
     evicted_line_t *evicted_line = malloc(sizeof(evicted_line_t));
     evicted_line->data = (byte_t *) calloc(B, sizeof(byte_t));
     /* your implementation */
+    
+    // we know its a miss; make it dependent on operation
+    cache_line_t * selectedLine = (cache_line_t *) select_line(cache, addr);
+    if(selectedLine -> valid && selectedLine -> dirty) {
+        dirty_eviction_count++;
+    } else if(selectedLine -> valid && !(selectedLine -> dirty)) {
+        clean_eviction_count++;
+    }
+    if(operation == READ) {
+        evicted_line -> valid = selectedLine -> valid;
+        evicted_line -> dirty = selectedLine -> dirty;
+        evicted_line -> addr = addr;
+        // evicted_line -> data = selectedLine -> data;
+
+        if(selectedLine -> data != NULL) {
+            memcpy(evicted_line -> data, selectedLine -> data, B);
+        } else {
+            evicted_line -> data = NULL;
+        }
+        selectedLine -> dirty = false;
+        selectedLine -> valid = true;
+        selectedLine -> tag = (addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, ADDRESS_LENGTH - cache -> s - cache -> b) - 1);
+        // selectedLine -> data = incoming_data;       
+        if(incoming_data != NULL) {
+            memcpy(selectedLine -> data, incoming_data, B);
+        }
+        
+        selectedLine -> lru = globalLru;
+        globalLru++;
+    } else {
+        //operation == WRITE
+        
+        evicted_line -> valid = selectedLine -> valid;
+        evicted_line -> dirty = true;
+        evicted_line -> addr = addr;
+        // evicted_line -> data = selectedLine -> data;
+        if(selectedLine -> data != NULL) {
+            memcpy(evicted_line -> data, selectedLine -> data, B);
+        } else {
+            evicted_line -> data = NULL;
+        }
+        
+        selectedLine -> dirty = true;
+        selectedLine -> valid = true;
+        selectedLine -> tag = (addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, sizeof(addr) * 8 - cache -> s - cache -> b) - 1);
+        //selectedLine -> data = incoming_data;
+        if(incoming_data != NULL) {
+            memcpy(selectedLine -> data, incoming_data, B);
+        }
+        
+        selectedLine -> lru = globalLru;
+        globalLru++;
+        
+        
+        //Tis bad
+        //Tis good
+        //Tis really good
+    }
+    
+
     return evicted_line;
 }
 
@@ -169,6 +292,10 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
 void get_byte_cache(cache_t *cache, uword_t addr, byte_t *dest)
 {
     /* your implementation */
+    //size_t B = (size_t)pow(2, cache->b);
+    size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
+    cache_line_t * gottenLine = get_line(cache, addr);
+    memcpy(dest, &((gottenLine -> data)[offset]), 1);
 }
 
 
@@ -179,6 +306,12 @@ void get_byte_cache(cache_t *cache, uword_t addr, byte_t *dest)
 void get_word_cache(cache_t *cache, uword_t addr, word_t *dest) {
 
     /* your implementation */
+    // cache_line_t * gottenLine = get_line(cache, addr);
+    // // memcpy(dest, gottenLine -> tag, ADDRESS_LENGTH - cache -> s - cache -> b);
+    // dest =(word_t *)(gottenLine -> tag);//TODO Is this WRITE?
+    size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
+    cache_line_t * gottenLine = get_line(cache, addr);
+    memcpy(dest, &(gottenLine -> data[offset]), 8);
 }
 
 
@@ -188,8 +321,11 @@ void get_word_cache(cache_t *cache, uword_t addr, word_t *dest) {
  */
 void set_byte_cache(cache_t *cache, uword_t addr, byte_t val)
 {
-
     /* your implementation */
+    //size_t B = (size_t)pow(2, cache->b);
+    size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
+    cache_line_t * gottenLine = get_line(cache, addr);
+    memcpy(&((gottenLine -> data)[offset]), &val, 1);
 }
 
 
@@ -200,6 +336,12 @@ void set_byte_cache(cache_t *cache, uword_t addr, byte_t val)
 void set_word_cache(cache_t *cache, uword_t addr, word_t val)
 {
     /* your implementation */
+    // cache_line_t * gottenLine = get_line(cache, addr);
+    // // memcpy(gottenLine -> tag, val, ADDRESS_LENGTH - cache -> s - cache -> b);
+    // gottenLine -> tag= val;
+    size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
+    cache_line_t * gottenLine = get_line(cache, addr);
+    memcpy(&((gottenLine -> data)[offset]), &val, 1);
 }
 
 /*

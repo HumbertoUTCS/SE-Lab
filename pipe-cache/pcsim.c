@@ -535,7 +535,153 @@ static byte_t sim_step_pipe(word_t ccount)
  *******************************************************************/
 void do_fetch_stage()
 {
+    //get_byte_val_I();
     /* your implementation */
+
+byte_t instr = HPACK(I_NOP, F_NONE);
+    
+    if(writeback_output -> icode == I_RET) {
+        f_pc = writeback_output -> valm;
+    } else if(memory_output -> icode == I_JMP && !(memory_output -> takebranch)) {
+        f_pc = memory_output -> vala;
+    } else {
+        f_pc = fetch_output -> predPC;
+    }
+
+    /* your implementation */
+    byte_t tempB;
+	imem_error |= !get_byte_val_I(mem, f_pc, &instr);
+	byte_t icode = HI4(instr);
+    byte_t ifun = LO4(instr);
+	word_t ra = 0;
+	word_t rb = 0;
+	word_t valc = 0;
+    word_t valp = 0;
+    //set f_pc at first
+    
+	switch (instr) {
+		case HPACK(I_NOP, F_NONE):
+			valp = f_pc + 1;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_HALT, F_NONE):
+			valp = f_pc + 1;//should be +1
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_RRMOVQ, F_NONE):
+		case HPACK(I_RRMOVQ, C_LE):
+		case HPACK(I_RRMOVQ, C_L):
+		case HPACK(I_RRMOVQ, C_E):
+		case HPACK(I_RRMOVQ, C_NE):
+		case HPACK(I_RRMOVQ, C_GE):
+		case HPACK(I_RRMOVQ, C_G):
+			imem_error |= !get_byte_val_I(mem, f_pc + 1, &tempB);
+			ra = HI4(tempB);
+			rb = LO4(tempB);
+			valp = f_pc + 2;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_IRMOVQ, F_NONE):
+			imem_error |= !get_byte_val_I(mem, f_pc + 1, &tempB);
+            ra = REG_NONE;
+			rb = LO4(tempB);
+			imem_error |= !get_word_val_I(mem, f_pc + 2, &valc);
+			valp = f_pc + 10;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_RMMOVQ, F_NONE):
+			imem_error |= !get_byte_val_I(mem, f_pc + 1, &tempB);
+			ra = HI4(tempB);
+			rb = LO4(tempB);
+			imem_error |= !get_word_val_I(mem, f_pc + 2, &valc);
+			valp = f_pc + 10;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_MRMOVQ, F_NONE):
+			imem_error |= !get_byte_val_I(mem, f_pc + 1, &tempB);
+			ra = HI4(tempB);
+			rb = LO4(tempB);
+			imem_error |= !get_word_val_I(mem, f_pc + 2, &valc);
+			valp = f_pc + 10;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_ALU, A_ADD):
+		case HPACK(I_ALU, A_SUB):
+		case HPACK(I_ALU, A_AND):
+		case HPACK(I_ALU, A_XOR):
+			imem_error |= !get_byte_val_I(mem, f_pc + 1, &tempB);
+			ra = HI4(tempB);
+			rb = LO4(tempB);
+			valp = f_pc + 2;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_JMP, C_YES):
+		case HPACK(I_JMP, C_LE):
+		case HPACK(I_JMP, C_L):
+		case HPACK(I_JMP, C_E):
+		case HPACK(I_JMP, C_NE):
+		case HPACK(I_JMP, C_GE):
+		case HPACK(I_JMP, C_G):
+			imem_error |= !get_word_val_I(mem, f_pc + 1, &valc);
+			valp = f_pc + 9;
+            fetch_output->predPC = valc;
+            //chose pc 
+	    	break;
+		case HPACK(I_CALL, F_NONE):
+		    imem_error |= !get_word_val_I(mem, f_pc + 1, &valc);
+		    valp = f_pc + 9;
+            fetch_output->predPC = valc;
+		    break;
+		case HPACK(I_RET, F_NONE):
+		    valp = f_pc + 1;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_PUSHQ, F_NONE):
+			imem_error |= !get_byte_val_I(mem, f_pc + 1, &tempB);
+			ra = HI4(tempB);
+			rb = LO4(tempB);
+			valp = f_pc + 2;
+            //fetch_output->predPC = valp;
+			break;
+		case HPACK(I_POPQ, F_NONE):
+			imem_error |= !get_byte_val_I(mem, f_pc + 1, &tempB);
+			ra = HI4(tempB);
+			rb = LO4(tempB);
+			valp = f_pc + 2;
+            //fetch_output->predPC = valp;
+			break;
+
+		default:
+			instr_valid = false;
+			printf("Invalid instruction\n");
+			break;
+	}
+
+    
+    
+    //f_pc = valp;
+    //valc jump or call
+    decode_input->icode = icode;
+    decode_input->ifun = ifun;
+    decode_input->ra =ra;
+    decode_input->rb = rb;
+    decode_input->valc = valc;
+    decode_input->valp = valp;
+    decode_input->status = STAT_AOK;
+    decode_input->stage_pc = f_pc;//idk
+
+    if (icode == I_JMP || icode == I_CALL) {
+        fetch_input -> predPC = valc;
+    } else {
+        fetch_input -> predPC = valp;
+    }
+
+    //ASSUMPTION #1:
+    //After last instruction, halts are inserted, set up status accordingly
+    if(icode == I_HALT) {
+        decode_input -> status = STAT_HLT;
+        //decode_input -> stage_pc = 0;
+    }
 
     /* logging function, do not change this */
     if (!imem_error) {
@@ -551,7 +697,158 @@ void do_fetch_stage()
  *******************************************************************/
 void do_decode_stage()
 {
-    /* your implementation */
+     byte_t srcA = REG_NONE;
+    byte_t srcB = REG_NONE;
+    byte_t destE = REG_NONE;
+    byte_t destM = REG_NONE;
+    word_t vala = 0;
+    word_t valb = 0;
+
+    // if (decode_input->ra == memory_input->srca ){
+
+    // }
+
+
+	switch (decode_output->icode) {
+		case I_HALT: break;
+
+		case I_NOP: break;
+
+		case I_RRMOVQ: // aka CMOVQ
+		    srcA = decode_output->ra;
+			destE = decode_output->rb;
+			break;
+		
+        case I_IRMOVQ:
+			destE = decode_output->rb;
+			break;
+
+		case I_RMMOVQ:
+			srcA = decode_output->ra;
+			srcB = decode_output->rb;
+			break;
+
+		case I_MRMOVQ:
+            //m1.y0 - Should we updating srcA ?
+			srcB = decode_output->rb;
+			destM = decode_output->ra;
+			break;
+
+		case I_ALU:
+			srcA = decode_output->ra;
+			srcB = decode_output->rb;
+			destE = decode_output->rb;
+    		break;
+
+		case I_JMP: break;
+	
+    	case I_CALL:
+			srcB = REG_RSP;
+			destE = REG_RSP;
+            vala = decode_output -> valp;
+			break;
+
+		case I_RET:
+			srcA = REG_RSP;
+			srcB = REG_RSP;
+			destE = REG_RSP;
+			break;
+
+		case I_PUSHQ:
+			srcA = decode_output->ra;
+			srcB = REG_RSP;
+			destE = REG_RSP;
+			break;
+
+		case I_POPQ:
+            srcA = REG_RSP;
+			srcB = REG_RSP;
+			destE = REG_RSP;
+			destM = decode_output->ra;
+			break;
+
+		default:
+			printf("icode is not valid (%d)", decode_output->icode);
+			break;
+	}
+
+	
+
+    //Assumptions made: 
+    //Big letters are outputs of stages; Small letters are inputs of stages
+    //d_srcA - just use the srcA I have made
+    //SCRATCH - From Diagram - ra
+    //WriteBack variables - use the dummy placeholders at the top of the stage
+    // - do something similar for memory variables
+
+    if(decode_output -> icode == I_CALL || decode_output -> icode == I_JMP) {
+        printf("DECODE_FORWARD_SRCA: CALL/JMP\n");
+        vala  = decode_output -> valp;
+    } else if(srcA == memory_input -> deste && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : e_dstE\n");
+        vala = memory_input -> vale; //m1.yo - should be going here; ?
+    } else if(srcA == memory_output -> destm && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : M_dstM\n");
+        vala = writeback_input -> valm;
+    } else if(srcA == memory_output -> deste && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : M_dstE\n");
+        vala = memory_output -> vale;
+    } else if(srcA == wb_destM && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : W_dstM\n");
+        vala = wb_valM;
+    } else if(srcA == wb_destE && srcA != 15) {
+        printf("DECODE_FORWARD_SRCA : W_dstE\n");
+        vala = wb_valE;
+    } else {
+        vala = get_reg_val(reg, srcA); //m1.yo - is going here instead; ?
+    }
+    
+    //Copy and paste for valb?
+    //From diagram - no valp case
+    if(srcB == memory_input -> deste && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : e_dstE\n");
+        valb = memory_input -> vale;
+    } else if(srcB == memory_output -> destm && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : M_dstM\n");
+        valb = writeback_input -> valm;
+    } else if(srcB == memory_output -> deste && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : M_dstE\n");
+        valb = memory_output -> vale;
+    } else if(srcB == wb_destM && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : W_dstM\n");
+        valb = wb_valM;
+    } else if(srcB == wb_destE && srcB != 15) {
+        printf("DECODE_FORWARD_SRCB : W_dstE\n");
+        valb = wb_valE;
+    } else {
+        valb = get_reg_val(reg, srcB);
+    }
+    
+    wb_destE = writeback_output->deste;
+    wb_valE  = writeback_output->vale;
+    wb_destM = writeback_output->destm;
+    wb_valM  = writeback_output->valm;
+
+    execute_input->icode = decode_output->icode;
+    execute_input->ifun = decode_output->ifun;
+    execute_input->valc = decode_output->valc;
+
+    /*if(decode_output -> icode == I_CALL) {
+        execute_input -> vala = decode_output -> valp;
+    } else {
+        execute_input->vala = vala;
+    }*/
+
+    execute_input->vala = vala;
+
+    execute_input->valb = valb;
+    execute_input->srca = srcA;
+    execute_input->srcb = srcB;
+    execute_input->deste = destE;
+    execute_input->destm = destM;
+    execute_input->status = decode_output->status;
+    execute_input -> stage_pc = decode_output -> stage_pc;
+
 }
 
 /************************** Execute stage **************************
@@ -561,15 +858,112 @@ void do_decode_stage()
  *******************************************************************/
 void do_execute_stage()
 {
-    /* dummy placeholders, replace them with your implementation */
-    cc_in = DEFAULT_CC; /* should not overwrite original cc */
+   cc_in = cc; /* should not overwrite original cc */
     /* some useful variables for logging purpose */
     bool setcc = false;
     alu_t alufun = A_NONE;
     word_t alua, alub;
     alua = alub = 0;
+    alua = execute_output -> vala;
+    alub = execute_output -> valb;
 
-    /* your implementation */
+    word_t vale = 0;
+    bool cnd = false;
+    byte_t deste = execute_output->deste;
+    
+    //memory_input->takebranch = false;
+
+
+    switch (execute_output->icode) {
+	    case I_HALT: break;
+
+		case I_NOP: break;
+
+		case I_RRMOVQ: // aka CMOVQ
+			cnd = cond_holds(cc, execute_output->ifun);
+			vale = execute_output->vala;
+			if (!cnd) {
+				deste = REG_NONE;
+			}
+			break;
+
+		case I_IRMOVQ:
+			vale = execute_output->valc;
+            alua = execute_output -> valc;
+            alub = execute_output -> vala;
+			break;
+
+		case I_RMMOVQ:
+			vale = execute_output->valb + execute_output->valc;
+            alua = execute_output -> valc;
+            alub = execute_output -> valb;
+			break;
+
+		case I_MRMOVQ:
+			vale = execute_output->valb + execute_output->valc;
+			break;
+
+		case I_ALU:
+            vale = compute_alu(execute_output->ifun, alua, alub);
+			cc_in = compute_cc(execute_output->ifun, alua, alub);
+			// setcc = true;
+            //From book p.493
+            //Post: Observed no change
+            setcc = writeback_input -> status != STAT_ADR && writeback_input -> status != STAT_INS && writeback_input -> status != STAT_HLT
+                    && writeback_output -> status != STAT_ADR && writeback_output -> status != STAT_INS && writeback_output -> status != STAT_HLT;
+            break;
+
+		case I_JMP:
+            alua = 0;
+			cnd = cond_holds(cc, execute_output->ifun);
+            //cc_in = compute_cc(execute_output->ifun, alua, alub);
+            
+            //Maybe 
+			break;
+
+		case I_CALL:
+			alua = -8;
+            vale = execute_output->valb - 8;
+			break;
+
+		case I_RET:
+            alua = 8;
+			vale = execute_output->valb + 8;
+			break;
+
+		case I_PUSHQ:
+			vale = execute_output->valb - 8;
+			break;
+
+		case I_POPQ:
+			vale = execute_output->valb + 8;
+			break;
+
+		default:
+			printf("icode is not valid (%d)", execute_output->icode);
+		    break;
+	}
+            
+        
+    memory_input->takebranch=cnd;
+    //if(execute_output -> icode == I_JMP) {
+    //    memory_input -> takebranch = true;
+    //}
+    
+    memory_input->icode = execute_output->icode;
+    
+    memory_input -> ifun = execute_output -> ifun;
+    memory_input->status = execute_output->status;
+    memory_input->vale = vale;
+    memory_input->vala = execute_output->vala;
+    memory_input->deste = deste;
+    memory_input->destm = execute_output->destm;
+    memory_input->srca = execute_output->srca;
+    memory_input -> stage_pc = execute_output -> stage_pc;
+    //something wrong; when jne I get ? when it should be +
+    alufun = execute_output -> ifun;
+    //printf("EX - ALUFUN = %d\n",op_name(alufun));
+
 
     /* logging functions, do not change these */
     if (execute_output->icode == I_JMP) {
@@ -593,13 +987,92 @@ void do_execute_stage()
  *******************************************************************/
 void do_memory_stage()
 {
-    /* dummy placeholders, replace them with your implementation */
-    mem_addr = 0;
-    mem_data = 0;
-    mem_write = false;
-    bool mem_read = false;
+    mem_addr   = 0;
+    mem_data   = 0;
+    mem_write  = false;
+    bool mem_read   = false;
+    dmem_status = READY;
 
-    /* your implementation */
+    word_t valm = 0;
+
+    switch (memory_output->icode) {
+			case I_HALT:
+				writeback_input->status = STAT_HLT;
+				break;
+
+			case I_NOP: break;
+
+			case I_RRMOVQ: break; // aka CMOVQ
+
+			case I_IRMOVQ: break;
+
+			case I_RMMOVQ:
+                
+				mem_write = true;
+				mem_addr = memory_output->vale;
+				mem_data = memory_output->vala;
+                //Something similar to MRMOVQ but with vala instead?
+                dmem_status = get_word_val_D(mem, memory_output->vale, &valm);
+				break;
+
+			case I_MRMOVQ:
+                //mem_read = true;
+				dmem_status = get_word_val_D(mem, memory_output->vale, &valm);
+				break;
+
+			case I_ALU: break;
+
+			case I_JMP: break;
+
+			case I_CALL:
+				mem_write = true;
+				mem_addr = memory_output->vale;
+				mem_data = memory_output->vala;
+                //in decode send valp to vala; only for call
+                //in execute send vala to vala; only for call
+                //??????? had to grab valp from decode @_@
+				break;
+
+			case I_RET:
+            //status changed her eidk inwinwjickwnoc
+				dmem_status = get_word_val_D(mem, memory_output->vala, &valm);
+				break;
+
+			case I_PUSHQ:
+				mem_write = true;
+				mem_addr = memory_output->vale;
+				mem_data = memory_output->vala;
+                dmem_status = get_word_val_D(mem, memory_output->vale, &valm);
+				break;
+
+			case I_POPQ:
+                //mem_read = true;
+				dmem_status = !get_word_val_D(mem, memory_output->vala, &valm);
+				break;
+
+			default:
+				printf("icode is not valid (%d)", memory_output->icode);
+				break;
+		}
+
+        printf("DMEM STATUS: %d\n",dmem_status);
+
+        writeback_input->icode = memory_output->icode;
+        writeback_input->ifun = memory_output->ifun;
+        writeback_input->vale = memory_output->vale;
+        writeback_input->valm = valm;
+        writeback_input->deste = memory_output->deste;
+        writeback_input->destm = memory_output->destm;
+        writeback_input -> stage_pc = memory_output -> stage_pc;
+
+        //writeback_input->status = memory_output->status;
+        //From book p.492
+        if(dmem_status == ERROR) {
+            writeback_input -> status = STAT_ADR;
+        } else {
+            writeback_input->status = memory_output->status;
+        }
+
 
     if (mem_read) {
         if ((dmem_status = get_word_val_D(mem, mem_addr, &mem_data)) != READY) {
@@ -625,14 +1098,31 @@ void do_memory_stage()
  *******************************************************************/
 void do_writeback_stage()
 {
-    /* dummy placeholders, replace them with your implementation */
-    wb_destE = REG_NONE;
-    wb_valE  = 0;
-    wb_destM = REG_NONE;
-    wb_valM  = 0;
+      wb_destE = writeback_output->deste;
+    wb_valE  = writeback_output->vale;
+    wb_destM = writeback_output->destm;
+    wb_valM  = writeback_output->valm;
 
     /* your implementation */
+    if(wb_destE != REG_NONE && ! imem_error && !dmem_status == ERROR && instr_valid) {
+        set_reg_val(reg, wb_destE, wb_valE);
+    }
+    if(wb_destM != REG_NONE && !imem_error && !dmem_status == ERROR && instr_valid) {
+        set_reg_val(reg, wb_destM, wb_valM);
+    }
 
+
+    
+    //status = writeback_output->status;
+
+    //From book ? I think this is wrong
+    //Tested and proven to go from 147 to 145?
+    
+    if(writeback_output -> status == STAT_BUB) {
+        status = STAT_AOK;
+    } else {
+        status = writeback_output -> status;
+    }
     status = writeback_output->status;
     if (wb_destE != REG_NONE && writeback_output -> status == STAT_AOK) {
 	    sim_log("\tWriteback: Wrote 0x%llx to register %s\n",
@@ -675,11 +1165,85 @@ void do_stall_check()
 {
     /* your implementation */
     /* dummy placeholders to show the usage of pipe_cntl() */
-    fetch_state->op     = pipe_cntl("PC", false, false);
-    decode_state->op    = pipe_cntl("ID", false, false);
-    execute_state->op   = pipe_cntl("EX", false, false);
-    memory_state->op    = pipe_cntl("MEM", false, false);
-    writeback_state->op = pipe_cntl("WB", false, false);
+     //I DONT THINK CC IS BEING SET CORRECTLY
+    bool returnHazard = (decode_output -> icode == I_RET || execute_output -> icode == I_RET || memory_output -> icode == I_RET);
+    bool loadUseHazard = ((execute_output -> icode == I_MRMOVQ || execute_output -> icode == I_POPQ) && (execute_output -> destm == execute_input -> srca || execute_output -> destm == execute_input -> srcb));
+    bool mispredictedBranchHazard = execute_output -> icode == I_JMP && !(memory_input -> takebranch);
+    printf("SC - BB ICODE %d cc %d\n", execute_output -> icode, cc);
+    bool comboA = mispredictedBranchHazard && returnHazard;
+    bool comboB = loadUseHazard && returnHazard;
+
+    // bool mBubble = false;
+    //From book p.494
+    //Post: Seems to work with no downsides! Ptest does not better
+    //
+    bool mBubble = writeback_input -> status == STAT_ADR || writeback_input -> status == STAT_INS || writeback_input -> status == STAT_HLT
+            || writeback_output -> status == STAT_ADR || writeback_output -> status == STAT_INS || writeback_output -> status == STAT_HLT;
+    
+    //Continuing p.494
+    //CANCELLED - not sure if it will provide benefits
+    
+    
+    
+    // printf("SC - RETURN - %d\nSC - LOAD_USE - %d\nSC - MISPREDICTED_BRANCH - %d\n",returnHazard, loadUseHazard, mispredictedBranchHazard);
+    //mem error 
+    //writeback error 
+    // if (memory_input -> status == STAT_ADR || memory_input -> status == STAT_INS){
+
+    // }
+    // if (writeback_input ->status == STAT_ADR || writeback_input ->status == STAT_INS){
+
+    // }
+    if (dmem_status == IN_FLIGHT){
+    fetch_state -> op = pipe_cntl("PC", true, false);
+        decode_state -> op = pipe_cntl("ID", true, false);
+        execute_state -> op = pipe_cntl("EX", true, false);
+        memory_state -> op = pipe_cntl("MEM", true, false);
+        writeback_state -> op = pipe_cntl("WB", false, true);
+    } else if(comboB) {
+        // printf("SC -> COMBO_B\n");
+        fetch_state -> op = pipe_cntl("PC", true, false);
+        decode_state -> op = pipe_cntl("ID", true, false);
+        execute_state -> op = pipe_cntl("EX", false, true);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
+        writeback_state -> op = pipe_cntl("WB", false, false);
+    } else if(comboA) {
+        // printf("SC ->  COMBO_A\n");
+        fetch_state -> op = pipe_cntl("PC", true, false);
+        decode_state -> op = pipe_cntl("ID", false, true);
+        execute_state -> op = pipe_cntl("EX", false, true);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
+        writeback_state -> op = pipe_cntl("WB", false, false);
+    } else if(returnHazard) {
+        // printf("SC -> RETURN\n");
+        fetch_state -> op = pipe_cntl("PC", true, false);
+        decode_state -> op = pipe_cntl("ID", false, true);
+        execute_state -> op = pipe_cntl("EX", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
+        writeback_state -> op = pipe_cntl("WB", false, false);
+    } else if(loadUseHazard) {
+        // printf("SC -> LOAD_USE\n");
+        fetch_state -> op = pipe_cntl("PC", true, false);
+        decode_state -> op = pipe_cntl("ID", true, false);
+        execute_state -> op = pipe_cntl("EX", false, true);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
+        writeback_state -> op = pipe_cntl("WB", false, false);
+    } else if(mispredictedBranchHazard) {
+        // printf("SC -> MISPREDICTED_BRANCH\n");
+        fetch_state -> op = pipe_cntl("PC", false, false);
+        decode_state -> op = pipe_cntl("ID", false, true);
+        execute_state -> op = pipe_cntl("EX", false, true);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
+        writeback_state -> op = pipe_cntl("WB", false, false);
+    } else {
+        // printf("SC -> ELSE\n");
+        fetch_state -> op = pipe_cntl("PC", false, false);
+        decode_state -> op = pipe_cntl("ID", false, false);
+        execute_state -> op = pipe_cntl("EX", false, false);
+        memory_state -> op = pipe_cntl("MEM", false, mBubble);
+        writeback_state -> op = pipe_cntl("WB", false, false);
+    }
+
 }
 
 /*
