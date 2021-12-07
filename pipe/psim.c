@@ -596,6 +596,7 @@ void do_fetch_stage()
 			valp = f_pc + 10;
             //fetch_output->predPC = valp;
 			break;
+        case HPACK(I_LEAQ, F_NONE):
 		case HPACK(I_MRMOVQ, F_NONE):
 			imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 			ra = HI4(tempB);
@@ -608,6 +609,9 @@ void do_fetch_stage()
 		case HPACK(I_ALU, A_SUB):
 		case HPACK(I_ALU, A_AND):
 		case HPACK(I_ALU, A_XOR):
+        case HPACK(I_SHF, S_HL):
+        case HPACK(I_SHF, S_HR):
+        case HPACK(I_SHF, S_AR):
 			imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 			ra = HI4(tempB);
 			rb = LO4(tempB);
@@ -729,13 +733,16 @@ void do_decode_stage()
 			srcA = decode_output->ra;
 			srcB = decode_output->rb;
 			break;
-
+        case I_LEAQ:
+            srcB = decode_output->rb;
+			destE = decode_output->ra;
+			break;
 		case I_MRMOVQ:
             //m1.y0 - Should we updating srcA ?
 			srcB = decode_output->rb;
 			destM = decode_output->ra;
 			break;
-
+        case I_SHF:
 		case I_ALU:
 			srcA = decode_output->ra;
 			srcB = decode_output->rb;
@@ -915,9 +922,13 @@ void do_execute_stage()
             alub = execute_output -> valb;
 			break;
 
+        case I_LEAQ:
 		case I_MRMOVQ:
 			vale = execute_output->valb + execute_output->valc;
 			break;
+        
+        case I_SHF:
+
 
 		case I_ALU:
             vale = compute_alu(execute_output->ifun, alua, alub);
@@ -1032,12 +1043,13 @@ void do_memory_stage()
                 //Something similar to MRMOVQ but with vala instead?
                 dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
 				break;
-
+            //case I_LEAQ:
 			case I_MRMOVQ:
                 //mem_read = true;
 				dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
 				break;
 
+            case I_SHF:
 			case I_ALU: break;
 
 			case I_JMP: break;
@@ -1179,6 +1191,7 @@ p_stat_t pipe_cntl(char *name, word_t stall, word_t bubble)
  *******************************************************************/
 void do_stall_check()
 {
+    //I DONT THINK CC IS BEING SET CORRECTLY
     bool returnHazard = (decode_output -> icode == I_RET || execute_output -> icode == I_RET || memory_output -> icode == I_RET);
     bool loadUseHazard = ((execute_output -> icode == I_MRMOVQ || execute_output -> icode == I_POPQ) && (execute_output -> destm == execute_input -> srca || execute_output -> destm == execute_input -> srcb));
     bool mispredictedBranchHazard = execute_output -> icode == I_JMP && !(memory_input -> takebranch);
