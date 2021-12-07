@@ -538,7 +538,7 @@ void do_fetch_stage()
     //get_byte_val_I();
     /* your implementation */
 
-byte_t instr = HPACK(I_NOP, F_NONE);
+    byte_t instr = HPACK(I_NOP, F_NONE);
     
     if(writeback_output -> icode == I_RET) {
         f_pc = writeback_output -> valm;
@@ -656,7 +656,16 @@ byte_t instr = HPACK(I_NOP, F_NONE);
 			printf("Invalid instruction\n");
 			break;
 	}
-
+    //XXX: SHOULD NEED THIS BUT DONT>?
+    // if(!instr_valid) {
+    //     decode_input -> status = STAT_INS;
+    // } else if(imem_error) {
+    //     decode_input -> status = STAT_ADR;
+    // } else if(imem_icode == HI4(HPACK(I_HALT, F_NONE))) {
+    //     decode_input -> status = STAT_HLT;
+    // } else {
+    //     decode_input -> status = STAT_AOK;
+    // }
     
     
     //f_pc = valp;
@@ -1047,7 +1056,7 @@ void do_memory_stage()
 
 			case I_POPQ:
                 //mem_read = true;
-				dmem_status = !get_word_val_D(mem, memory_output->vala, &valm);
+				dmem_status = get_word_val_D(mem, memory_output->vala, &valm);
 				break;
 
 			default:
@@ -1098,16 +1107,16 @@ void do_memory_stage()
  *******************************************************************/
 void do_writeback_stage()
 {
-      wb_destE = writeback_output->deste;
+    wb_destE = writeback_output->deste;
     wb_valE  = writeback_output->vale;
     wb_destM = writeback_output->destm;
     wb_valM  = writeback_output->valm;
 
     /* your implementation */
-    if(wb_destE != REG_NONE && ! imem_error && !dmem_status == ERROR && instr_valid) {
+    if(wb_destE != REG_NONE && !imem_error && dmem_status != ERROR && instr_valid) {
         set_reg_val(reg, wb_destE, wb_valE);
     }
-    if(wb_destM != REG_NONE && !imem_error && !dmem_status == ERROR && instr_valid) {
+    if(wb_destM != REG_NONE && !imem_error && dmem_status != ERROR && instr_valid) {
         set_reg_val(reg, wb_destM, wb_valM);
     }
 
@@ -1123,7 +1132,7 @@ void do_writeback_stage()
     } else {
         status = writeback_output -> status;
     }
-    status = writeback_output->status;
+    // status = writeback_output->status;
     if (wb_destE != REG_NONE && writeback_output -> status == STAT_AOK) {
 	    sim_log("\tWriteback: Wrote 0x%llx to register %s\n",
 		    wb_valE, reg_name(wb_destE));

@@ -136,7 +136,7 @@ cache_line_t *get_line(cache_t *cache, uword_t addr)
 
     for (unsigned int j = 0; j < cache -> E; j++){
         //Going through all lines hopefully
-        if (cache -> sets[setIndex].lines[j].tag == ((addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, ADDRESS_LENGTH - cache -> s - cache -> b) - 1))) {
+        if (cache -> sets[setIndex].lines[j].tag == ((addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, ADDRESS_LENGTH - cache -> s - cache -> b) - 1)) && cache -> sets[setIndex].lines[j].valid) {
             //XXX : why the dots and the arrows; all arrows ?
             (cache -> sets[setIndex].lines[j]).lru = globalLru;
             globalLru++;
@@ -230,39 +230,28 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
     } else if(selectedLine -> valid && !(selectedLine -> dirty)) {
         clean_eviction_count++;
     }
-    if(operation == READ) {
-        evicted_line -> valid = selectedLine -> valid;
-        evicted_line -> dirty = selectedLine -> dirty;
-        evicted_line -> addr = addr;
-        // evicted_line -> data = selectedLine -> data;
 
-        if(selectedLine -> data != NULL) {
-            memcpy(evicted_line -> data, selectedLine -> data, B);
-        } else {
-            evicted_line -> data = NULL;
-        }
+    evicted_line -> valid = selectedLine -> valid;
+    evicted_line -> dirty = selectedLine -> dirty;
+    evicted_line -> addr = addr;
+    if(selectedLine -> data != NULL) {
+        memcpy(evicted_line -> data, selectedLine -> data, B);
+    } else {
+        evicted_line -> data = NULL;
+    }
+    if(operation == READ) {
+        
         selectedLine -> dirty = false;
         selectedLine -> valid = true;
         selectedLine -> tag = (addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, ADDRESS_LENGTH - cache -> s - cache -> b) - 1);
         // selectedLine -> data = incoming_data;       
         if(incoming_data != NULL) {
             memcpy(selectedLine -> data, incoming_data, B);
+        } else {
+            selectedLine -> data = NULL;
         }
-        
-        selectedLine -> lru = globalLru;
-        globalLru++;
     } else {
         //operation == WRITE
-        
-        evicted_line -> valid = selectedLine -> valid;
-        evicted_line -> dirty = true;
-        evicted_line -> addr = addr;
-        // evicted_line -> data = selectedLine -> data;
-        if(selectedLine -> data != NULL) {
-            memcpy(evicted_line -> data, selectedLine -> data, B);
-        } else {
-            evicted_line -> data = NULL;
-        }
         
         selectedLine -> dirty = true;
         selectedLine -> valid = true;
@@ -270,18 +259,16 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
         //selectedLine -> data = incoming_data;
         if(incoming_data != NULL) {
             memcpy(selectedLine -> data, incoming_data, B);
+        } else {//XXX: NO OBSERVED CHANGE WITH OR WITHOUT ELSE
+            selectedLine -> data = NULL;
         }
-        
-        selectedLine -> lru = globalLru;
-        globalLru++;
-        
-        
         //Tis bad
         //Tis good
         //Tis really good
     }
     
-
+    selectedLine -> lru = globalLru;
+    globalLru++;
     return evicted_line;
 }
 
@@ -292,7 +279,8 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
 void get_byte_cache(cache_t *cache, uword_t addr, byte_t *dest)
 {
     /* your implementation */
-    //size_t B = (size_t)pow(2, cache->b);
+    // //size_t B = (size_t)pow(2, cache->b);
+    //XXX: NO CHANGE WITH OR WITHOUT ANYHTING
     size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
     cache_line_t * gottenLine = get_line(cache, addr);
     memcpy(dest, &((gottenLine -> data)[offset]), 1);
@@ -323,6 +311,7 @@ void set_byte_cache(cache_t *cache, uword_t addr, byte_t val)
 {
     /* your implementation */
     //size_t B = (size_t)pow(2, cache->b);
+    //XXX: NO CHANGE WITH OR WITHOUT????
     size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
     cache_line_t * gottenLine = get_line(cache, addr);
     memcpy(&((gottenLine -> data)[offset]), &val, 1);
