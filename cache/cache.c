@@ -240,33 +240,22 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
         evicted_line -> data = NULL;
     }
     if(operation == READ) {
-        
         selectedLine -> dirty = false;
-        selectedLine -> valid = true;
-        selectedLine -> tag = (addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, ADDRESS_LENGTH - cache -> s - cache -> b) - 1);
-        // selectedLine -> data = incoming_data;       
-        if(incoming_data != NULL) {
-            memcpy(selectedLine -> data, incoming_data, B);
-        } else {
-            selectedLine -> data = NULL;
-        }
-    } else {
-        //operation == WRITE
-        
+    } else { //OPERATION WRITE
         selectedLine -> dirty = true;
-        selectedLine -> valid = true;
-        selectedLine -> tag = (addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, sizeof(addr) * 8 - cache -> s - cache -> b) - 1);
-        //selectedLine -> data = incoming_data;
-        if(incoming_data != NULL) {
-            memcpy(selectedLine -> data, incoming_data, B);
-        } else {//XXX: NO OBSERVED CHANGE WITH OR WITHOUT ELSE
-            selectedLine -> data = NULL;
-        }
-        //Tis bad
-        //Tis good
-        //Tis really good
     }
+    //Tis bad
+    //Tis good
+    //Tis really good
     
+    //selectedLine -> data = incoming_data;
+    if(incoming_data != NULL) {
+        memcpy(selectedLine -> data, incoming_data, B);
+    } else {//XXX: NO OBSERVED CHANGE WITH OR WITHOUT ELSE
+        selectedLine -> data = NULL;
+    }
+    selectedLine -> valid = true;
+    selectedLine -> tag = (addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, sizeof(addr) * 8 - cache -> s - cache -> b) - 1);
     selectedLine -> lru = globalLru;
     globalLru++;
     return evicted_line;
@@ -330,7 +319,7 @@ void set_word_cache(cache_t *cache, uword_t addr, word_t val)
     // gottenLine -> tag= val;
     size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
     cache_line_t * gottenLine = get_line(cache, addr);
-    memcpy(&((gottenLine -> data)[offset]), &val, 1);
+    memcpy(&((gottenLine -> data)[offset]), &val, 8);
 }
 
 /*
