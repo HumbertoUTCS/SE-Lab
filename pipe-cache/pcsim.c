@@ -1131,11 +1131,12 @@ void do_writeback_stage()
     //From book ? I think this is wrong
     //Tested and proven to go from 147 to 145?
     
-    if(writeback_output -> status == STAT_BUB) {
-        status = STAT_AOK;
-    } else {
-        status = writeback_output -> status;
-    }
+    // if(writeback_output -> status == STAT_BUB) {
+    //     status = STAT_AOK;
+    // } else {
+    //     status = writeback_output -> status;
+    // }
+    status = writeback_output -> status;
     // status = writeback_output->status;
     if (wb_destE != REG_NONE && writeback_output -> status == STAT_AOK) {
 	    sim_log("\tWriteback: Wrote 0x%llx to register %s\n",

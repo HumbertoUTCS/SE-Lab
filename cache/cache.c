@@ -289,9 +289,12 @@ void get_word_cache(cache_t *cache, uword_t addr, word_t *dest) {
     // cache_line_t * gottenLine = get_line(cache, addr);
     // // memcpy(dest, gottenLine -> tag, ADDRESS_LENGTH - cache -> s - cache -> b);
     // dest =(word_t *)(gottenLine -> tag);//TODO Is this WRITE?
-    size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
-    cache_line_t * gottenLine = get_line(cache, addr);
-    memcpy(dest, &(gottenLine -> data[offset]), 8);
+    //size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
+    // cache_line_t * gottenLine = get_line(cache, addr);
+    //memcpy(dest, &(gottenLine -> data[offset]), 8);
+    for(int i=0; i<8; i++) {
+        get_byte_cache(cache, addr+i, ((byte_t*)(dest))+i);
+    }
 }
 
 
@@ -320,12 +323,15 @@ void set_word_cache(cache_t *cache, uword_t addr, word_t val)
     // cache_line_t * gottenLine = get_line(cache, addr);
     // // memcpy(gottenLine -> tag, val, ADDRESS_LENGTH - cache -> s - cache -> b);
     // gottenLine -> tag= val;
-    size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
-    cache_line_t * gottenLine = get_line(cache, addr);
+    //size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
+    //cache_line_t * gottenLine = get_line(cache, addr);
     
     //ANDREW SAID 8 INSTEAD OF 1
     //memcpy(&((gottenLine -> data)[offset]), &val, 1);
-    memcpy(&(gottenLine -> data[offset]), &val, 8);
+    // memcpy(&(gottenLine -> data[offset]), &val, 8);
+    for(int i=0; i<8; i++) {
+        set_byte_cache(cache, addr+i, ((byte_t*)(&val))[i]);
+    }
 }
 
 /*
