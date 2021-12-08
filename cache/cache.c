@@ -231,33 +231,36 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
         clean_eviction_count++;
     }
 
-    evicted_line -> valid = selectedLine -> valid;
-    evicted_line -> dirty = selectedLine -> dirty;
-    evicted_line -> addr = addr;
+    //Tis bad
+    //Tis good
+    //Tis really good
+    //TIS REALLY BAD
+    
+    //selectedLine -> data = incoming_data;
     if(selectedLine -> data != NULL) {
         memcpy(evicted_line -> data, selectedLine -> data, B);
-    } else {
-        evicted_line -> data = NULL;
     }
+    if(incoming_data != NULL) {
+        memcpy(selectedLine -> data, incoming_data, B);
+    }
+    
+    evicted_line -> valid = selectedLine -> valid;
+    evicted_line -> dirty = selectedLine -> dirty;
     if(operation == READ) {
         selectedLine -> dirty = false;
     } else { //OPERATION WRITE
         selectedLine -> dirty = true;
     }
-    //Tis bad
-    //Tis good
-    //Tis really good
-    
-    //selectedLine -> data = incoming_data;
-    if(incoming_data != NULL) {
-        memcpy(selectedLine -> data, incoming_data, B);
-    } else {//XXX: NO OBSERVED CHANGE WITH OR WITHOUT ELSE
-        selectedLine -> data = NULL;
-    }
+    // evicted_line -> addr = addr;
+    //change addr to keep the set index since the tag and the offset bits(0) don't match; grab from selected_line -> tag 
+    evicted_line -> addr = ((selectedLine -> tag) << (cache -> s + cache -> b)) + (((addr >> (cache -> b)) & ((uword_t)pow(2,cache -> s)-1)) << (cache -> b));
+
+
     selectedLine -> valid = true;
-    selectedLine -> tag = (addr >> (cache -> s + cache -> b)) & ((uword_t)pow(2, sizeof(addr) * 8 - cache -> s - cache -> b) - 1);
+    selectedLine -> tag = (addr >> (cache -> s + cache -> b));// & ((uword_t)pow(2, ADDRESS_LENGTH - cache -> s - cache -> b) - 1);
     selectedLine -> lru = globalLru;
     globalLru++;
+
     return evicted_line;
 }
 
@@ -272,7 +275,7 @@ void get_byte_cache(cache_t *cache, uword_t addr, byte_t *dest)
     //XXX: NO CHANGE WITH OR WITHOUT ANYHTING
     size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
     cache_line_t * gottenLine = get_line(cache, addr);
-    memcpy(dest, &((gottenLine -> data)[offset]), 1);
+    memcpy(dest, &(gottenLine -> data[offset]), 1);
 }
 
 
@@ -303,7 +306,7 @@ void set_byte_cache(cache_t *cache, uword_t addr, byte_t val)
     //XXX: NO CHANGE WITH OR WITHOUT????
     size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
     cache_line_t * gottenLine = get_line(cache, addr);
-    memcpy(&((gottenLine -> data)[offset]), &val, 1);
+    memcpy(&(gottenLine -> data[offset]), &val, 1);
 }
 
 
@@ -319,7 +322,10 @@ void set_word_cache(cache_t *cache, uword_t addr, word_t val)
     // gottenLine -> tag= val;
     size_t offset = addr & ((uword_t)pow(2, cache -> b) - 1);
     cache_line_t * gottenLine = get_line(cache, addr);
-    memcpy(&((gottenLine -> data)[offset]), &val, 8);
+    
+    //ANDREW SAID 8 INSTEAD OF 1
+    //memcpy(&((gottenLine -> data)[offset]), &val, 1);
+    memcpy(&(gottenLine -> data[offset]), &val, 8);
 }
 
 /*
