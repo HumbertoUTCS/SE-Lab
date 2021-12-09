@@ -609,10 +609,16 @@ void do_fetch_stage()
 		case HPACK(I_ALU, A_SUB):
 		case HPACK(I_ALU, A_AND):
 		case HPACK(I_ALU, A_XOR):
+			imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
+			ra = HI4(tempB);
+			rb = LO4(tempB);
+			valp = f_pc + 2;
+            //fetch_output->predPC = valp;
+			break;
         case HPACK(I_SHF, S_HL):
         case HPACK(I_SHF, S_HR):
         case HPACK(I_SHF, S_AR):
-			imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
+            imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 			ra = HI4(tempB);
 			rb = LO4(tempB);
 			valp = f_pc + 2;
@@ -627,13 +633,13 @@ void do_fetch_stage()
 		case HPACK(I_JMP, C_G):
 			imem_error |= !get_word_val(mem, f_pc + 1, &valc);
 			valp = f_pc + 9;
-            fetch_output->predPC = valc;
+            // fetch_output->predPC = valc;
             //chose pc 
 	    	break;
 		case HPACK(I_CALL, F_NONE):
 		    imem_error |= !get_word_val(mem, f_pc + 1, &valc);
 		    valp = f_pc + 9;
-            fetch_output->predPC = valc;
+            // fetch_output->predPC = valc;
 		    break;
 		case HPACK(I_RET, F_NONE):
 		    valp = f_pc + 1;
@@ -872,7 +878,25 @@ void do_decode_stage()
     execute_input -> stage_pc = decode_output -> stage_pc;
     /* your implementation */
 }
-
+word_t compute_shf(alu_t op, word_t argA, word_t argB)
+{
+    word_t val;
+    switch(op) {
+    case S_HL: //left shift
+	val = argB << argA;
+	break;
+    case S_HR: //right shift
+	val = (uword_t)argB >> argA;
+    //val = val & (pow(2,argA)-1);
+	break;
+    case S_AR: //right (arithmetic) shift
+	val = argB >> argA;
+	break;
+    default:
+	val = 0;
+    }
+    return val;
+}
 /************************** Execute stage **************************
  * TODO: update [*memory_input, cc_in]
  * you may find these functions useful:
@@ -928,7 +952,22 @@ void do_execute_stage()
 			break;
         
         case I_SHF:
+            vale = compute_shf(execute_output->ifun, alua, alub);
+            cc_in = compute_cc(execute_output->ifun, alua, alub);
+            bool zf = vale == 0;
+            // bool sf = (vale & 0x8000000000000000) >> 15;
+            bool sf = ((uword_t)vale) >= ((uword_t)0x8000000000000000);
+            if(zf != 0) {
+                cc_in = cc_in | 4;
+            }
+            if(sf) {
+                cc_in = cc_in | 2;
+            }
 
+            setcc = true;
+            // setcc = writeback_input -> status != STAT_ADR && writeback_input -> status != STAT_INS && writeback_input -> status != STAT_HLT
+            //         && writeback_output -> status != STAT_ADR && writeback_output -> status != STAT_INS && writeback_output -> status != STAT_HLT;
+            break;
 
 		case I_ALU:
             vale = compute_alu(execute_output->ifun, alua, alub);
