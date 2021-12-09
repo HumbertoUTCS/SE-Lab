@@ -3,9 +3,13 @@
   irmovq  $1, %rcx
   irmovq  $2, %rdx
   irmovq  $3, %rbx
+  irmovq  $4, %rsi
   rrmovq  %rax, %rcx
   rrmovq  %rcx, %rdx
   rrmovq  %rdx, %rbx
+  rrmovq  %rbx, %rsi
   rrmovq  %rcx, %rdx
   rrmovq  %rdx, %rbx
+  rrmovq  %rbx, %rsi
   rrmovq  %rdx, %rbx
+  rrmovq  %rbx, %rsi
