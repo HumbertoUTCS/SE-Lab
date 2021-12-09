@@ -1,2 +1,11 @@
-# Design your own testcase here
-halt
+# Extensively checks forwarding; registers should be all set to zero
+  irmovq  $0, %rax
+  irmovq  $1, %rcx
+  irmovq  $2, %rdx
+  irmovq  $3, %rbx
+  rrmovq  %rax, %rcx
+  rrmovq  %rcx, %rdx
+  rrmovq  %rdx, %rbx
+  rrmovq  %rcx, %rdx
+  rrmovq  %rdx, %rbx
+  rrmovq  %rdx, %rbx
