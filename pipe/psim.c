@@ -886,7 +886,7 @@ word_t compute_shf(alu_t op, word_t argA, word_t argB)
 	val = argB << argA;
 	break;
     case S_HR: //right shift
-	val = (uword_t)argB >> argA;
+	val = ((uword_t)(argB)) >> argA;
     //val = val & (pow(2,argA)-1);
 	break;
     case S_AR: //right (arithmetic) shift
@@ -953,10 +953,12 @@ void do_execute_stage()
         
         case I_SHF:
             vale = compute_shf(execute_output->ifun, alua, alub);
-            cc_in = compute_cc(execute_output->ifun, alua, alub);
+            // cc_in = compute_cc(execute_output->ifun, alua, alub);
+
+            cc_in = 0;
             bool zf = vale == 0;
             // bool sf = (vale & 0x8000000000000000) >> 15;
-            bool sf = ((uword_t)vale) >= ((uword_t)0x8000000000000000);
+            bool sf = (vale & 0x8000000000000000) == (0x8000000000000000);
             if(zf != 0) {
                 cc_in = cc_in | 4;
             }
@@ -964,9 +966,9 @@ void do_execute_stage()
                 cc_in = cc_in | 2;
             }
 
-            setcc = true;
-            // setcc = writeback_input -> status != STAT_ADR && writeback_input -> status != STAT_INS && writeback_input -> status != STAT_HLT
-            //         && writeback_output -> status != STAT_ADR && writeback_output -> status != STAT_INS && writeback_output -> status != STAT_HLT;
+            // setcc = true;
+            setcc = writeback_input -> status != STAT_ADR && writeback_input -> status != STAT_INS && writeback_input -> status != STAT_HLT
+                    && writeback_output -> status != STAT_ADR && writeback_output -> status != STAT_INS && writeback_output -> status != STAT_HLT;
             break;
 
 		case I_ALU:
