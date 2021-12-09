@@ -605,6 +605,7 @@ void do_fetch_stage()
 			valp = f_pc + 10;
             //fetch_output->predPC = valp;
 			break;
+        case HPACK(I_VECADD, F_NONE):
 		case HPACK(I_ALU, A_ADD):
 		case HPACK(I_ALU, A_SUB):
 		case HPACK(I_ALU, A_AND):
@@ -624,6 +625,7 @@ void do_fetch_stage()
 			valp = f_pc + 2;
             //fetch_output->predPC = valp;
 			break;
+
 		case HPACK(I_JMP, C_YES):
 		case HPACK(I_JMP, C_LE):
 		case HPACK(I_JMP, C_L):
@@ -748,6 +750,7 @@ void do_decode_stage()
 			srcB = decode_output->rb;
 			destM = decode_output->ra;
 			break;
+        case I_VECADD:
         case I_SHF:
 		case I_ALU:
 			srcA = decode_output->ra;
@@ -897,6 +900,14 @@ word_t compute_shf(alu_t op, word_t argA, word_t argB)
     }
     return val;
 }
+word_t compute_vecadd(alu_t op, word_t argA, word_t argB)
+{
+    word_t * val = malloc(sizeof(word_t));
+    for(int i=0; i<8; i++) {
+        ((byte_t *) val)[i]= ((byte_t*)(&argA))[i] + ((byte_t*)(&argB))[i];
+    }
+    return *val;
+}
 /************************** Execute stage **************************
  * TODO: update [*memory_input, cc_in]
  * you may find these functions useful:
@@ -979,6 +990,29 @@ void do_execute_stage()
             //Post: Observed no change
             setcc = writeback_input -> status != STAT_ADR && writeback_input -> status != STAT_INS && writeback_input -> status != STAT_HLT
                     && writeback_output -> status != STAT_ADR && writeback_output -> status != STAT_INS && writeback_output -> status != STAT_HLT;
+            break;
+        
+        case I_VECADD:
+            vale = compute_vecadd(execute_output->ifun, alua, alub);
+			cc_in = compute_cc(execute_output->ifun, alua, alub);
+			// setcc = true;
+            //From book p.493
+            //Post: Observed no change
+            cc_in = 0;
+            bool zff = vale == 0;
+            // bool sf = (vale & 0x8000000000000000) >> 15;
+            bool sff = (vale & 0x8000000000000000) == (0x8000000000000000);
+            if(zff != 0) {
+                cc_in = cc_in | 4;
+            }
+            if(sff) {
+                cc_in = cc_in | 2;
+            }
+
+
+            setcc = writeback_input -> status != STAT_ADR && writeback_input -> status != STAT_INS && writeback_input -> status != STAT_HLT
+                    && writeback_output -> status != STAT_ADR && writeback_output -> status != STAT_INS && writeback_output -> status != STAT_HLT;
+             
             break;
 
 		case I_JMP:
@@ -1089,7 +1123,7 @@ void do_memory_stage()
                 //mem_read = true;
 				dmem_error |= !get_word_val(mem, memory_output->vale, &valm);
 				break;
-
+            case I_VECADD:
             case I_SHF:
 			case I_ALU: break;
 
